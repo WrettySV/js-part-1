@@ -1,4 +1,7 @@
+import Maps from '/maps.js';
+
 // Загрузка данных через await
+
 async function getDataAsync(url) {
     // https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch
     const response = await fetch(url, {
@@ -77,14 +80,17 @@ function getDataPromise(url) {
 }
 
 // Две функции просто для примера, выберите с await или promise, какая нравится
-const getData = getDataAsync || getDataPromise;
+const getData = getDataAsync;
+// || getDataPromise;
 
 async function loadCountriesData() {
     let countries = [];
     try {
         // ПРОВЕРКА ОШИБКИ №1: ломаем этот урл, заменяя all на allolo,
         // получаем кастомную ошибку.
-        countries = await getData('https://restcountries.com/v3.1/all?fields=name&fields=cca3&fields=area');
+        countries = await getData(
+            'https://restcountries.com/v3.1/all?fields=name&fields=cca3&fields=area&fields=borders'
+        );
     } catch (error) {
         // console.log('catch for getData');
         // console.error(error);
@@ -135,10 +141,94 @@ const output = document.getElementById('output');
     toCountry.disabled = false;
     submit.disabled = false;
 
-    form.addEventListener('submit', (event) => {
+    const getCountryCode = (countryName) => {
+        const country = Object.values(countriesData).find((country) => country.name.common === countryName);
+        if (country) {
+            return country.cca3;
+        }
+        output.textContent = `Код страны ${countryName} не найден в countriesData`;
+        return null;
+    };
+
+    form.addEventListener('submit', async (event) => {
         event.preventDefault();
         // TODO: Вывести, откуда и куда едем, и что идёт расчёт.
         // TODO: Рассчитать маршрут из одной страны в другую за минимум запросов.
         // TODO: Вывести маршрут и общее количество запросов.
+
+        const from = fromCountry.value;
+        const to = toCountry.value;
+        const fromCode = getCountryCode(from);
+        const toCode = getCountryCode(to);
+
+        if (fromCode !== null && toCode !== null) {
+            output.textContent = `Расчет маршрута из ${from} в ${to}`;
+            output.style.whiteSpace = 'pre-line';
+            output.textContent += '\n';
+            const result = await calculateRoute(countriesData, fromCode, toCode);
+            if (result.route.length > 10) {
+                output.textContent += `Маршрут слишком длинный`;
+            } else {
+                Maps.setEndPoints(fromCode, toCode);
+                Maps.markAsVisited(result.routeCodes.slice(1, -1));
+                output.textContent += `${result.route.join(' → ')}`;
+                output.style.whiteSpace = 'pre-line';
+                output.textContent += '\n';
+                output.textContent += `Понадобилось всего ${result.qCount} запросов!`;
+            }
+        }
     });
 })();
+
+const getCountryName = (countriesData, countryCode) => {
+    const countryData = Object.entries(countriesData).find((data) => data[0] === countryCode);
+    if (countryData) {
+        return countryData[1].name.common;
+    }
+    output.textContent = `Страна ${countryCode} не найдена в countriesData`;
+    return null;
+};
+
+// eslint-disable-next-line consistent-return
+async function calculateRoute(countriesData, fromCode, toCode) {
+    const queue = [];
+    const visited = new Set();
+    const parent = {};
+    const route = [];
+    const routeCodes = [];
+    let qCount = 0;
+
+    queue.push(fromCode);
+    visited.add(fromCode);
+
+    while (queue.length > 0) {
+        const currentCode = queue.shift();
+        const neighbors = countriesData[currentCode].borders;
+        qCount += 1;
+
+        for (const neighbor of neighbors) {
+            if (!visited.has(neighbor)) {
+                queue.push(neighbor);
+                visited.add(neighbor);
+                parent[neighbor] = currentCode;
+            }
+        }
+        if (currentCode === toCode) {
+            let code = currentCode;
+            while (code !== fromCode) {
+                route.unshift(getCountryName(countriesData, code));
+                routeCodes.unshift(code);
+                code = parent[code];
+            }
+            route.unshift(getCountryName(countriesData, fromCode));
+            routeCodes.unshift(fromCode);
+
+            return {
+                route,
+                routeCodes,
+                qCount,
+            };
+        }
+    }
+    output.textContent = 'Маршрут не найден';
+}
