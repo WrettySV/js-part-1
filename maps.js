@@ -1,12 +1,11 @@
 /* global am5, am5map, am5geodata_worldLow, am5themes_Animated */
-
 import 'https://cdn.amcharts.com/lib/5/index.js';
 import 'https://cdn.amcharts.com/lib/5/map.js';
 import 'https://cdn.amcharts.com/lib/5/geodata/worldLow.js';
 import 'https://cdn.amcharts.com/lib/5/themes/Animated.js';
 import cca3to2Map from '/cca3to2.js';
 
-const empty = () => {
+const empty = (...args) => {
     console.error('am5 is not initialized yet');
 };
 
